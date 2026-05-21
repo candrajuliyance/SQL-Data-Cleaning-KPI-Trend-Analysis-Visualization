@@ -1,0 +1,161 @@
+# ==========================
+# 1. IMPORT LIBRARIES
+# ==========================
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import sqlite3
+
+# ==========================
+# 2. CREATE DATABASE
+# ==========================
+conn = sqlite3.connect(':memory:')
+cursor = conn.cursor()
+
+# Create Sales Table
+cursor.execute("""
+CREATE TABLE SALES(
+    CUSTOMER_ID INTEGER,
+    CUSTOMER_NAME TEXT,
+    MONTH TEXT,
+    REVENUE INTEGER,
+    COST INTEGER
+);
+""")
+
+# Insert messy data
+cursor.executemany("""
+INSERT INTO SALES VALUES (?, ?, ?, ?, ?)
+""", [
+    (100, 'Anna ', 'Jan', 100000, 60000),
+    (101, 'Michael', 'Jan', 120000, 70000),
+    (102, 'anna', 'Feb', 110000, 65000),
+    (103, 'John', 'Feb', None, 50000),
+    (104, 'Emma', 'Mar', 150000, None),
+    (105, None, 'Mar', 180000, 90000)
+])
+
+conn.commit()
+
+# ==========================
+# 3. SQL QUERY
+# ==========================
+query = """
+SELECT *
+FROM SALES
+"""
+
+df = pd.read_sql_query(query, conn)
+
+print("RAW DATA")
+print(df)
+
+# ==========================
+# 4. DATA CLEANING
+# ==========================
+
+# Remove spaces
+df['CUSTOMER_NAME'] = df['CUSTOMER_NAME'].str.strip()
+
+# Lowercase names
+df['CUSTOMER_NAME'] = (
+    df['CUSTOMER_NAME']
+    .str.lower()
+)
+
+# Fill missing revenue
+df['REVENUE'] = df['REVENUE'].fillna(
+    df['REVENUE'].median()
+)
+
+# Fill missing cost
+df['COST'] = df['COST'].fillna(
+    df['COST'].median()
+)
+
+# Remove missing names
+df = df.dropna(
+    subset=['CUSTOMER_NAME']
+)
+
+# Remove duplicates
+df = df.drop_duplicates()
+
+print("\nCLEAN DATA")
+print(df)
+
+# ==========================
+# 5. CREATE KPI
+# ==========================
+
+# Profit KPI
+df['PROFIT'] = (
+    df['REVENUE'] - df['COST']
+)
+
+# Profit Margin KPI
+df['PROFIT_MARGIN'] = (
+    df['PROFIT'] /
+    df['REVENUE']
+) * 100
+
+# Total Revenue
+total_revenue = df['REVENUE'].sum()
+
+# Total Profit
+total_profit = df['PROFIT'].sum()
+
+# Average Revenue
+avg_revenue = df['REVENUE'].mean()
+
+print("\nKPI REPORT")
+print("Total Revenue:", total_revenue)
+print("Total Profit:", total_profit)
+print("Average Revenue:", round(avg_revenue,2))
+
+# ==========================
+# 6. FINDING TRENDS
+# ==========================
+
+monthly_sales = (
+    df.groupby('MONTH')['REVENUE']
+    .sum()
+    .reset_index()
+)
+
+print("\nMONTHLY TREND")
+print(monthly_sales)
+
+# ==========================
+# 7. VISUALIZATION
+# ==========================
+
+# Revenue Trend
+plt.figure(figsize=(8,5))
+
+plt.plot(
+    monthly_sales['MONTH'],
+    monthly_sales['REVENUE'],
+    marker='o'
+)
+
+plt.title('Monthly Revenue Trend')
+plt.xlabel('Month')
+plt.ylabel('Revenue')
+
+plt.show()
+
+# Profit by Customer
+plt.figure(figsize=(8,5))
+
+sns.barplot(
+    x='CUSTOMER_NAME',
+    y='PROFIT',
+    data=df
+)
+
+plt.title('Profit by Customer')
+plt.xlabel('Customer')
+plt.ylabel('Profit')
+
+plt.show()
